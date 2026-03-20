@@ -1,0 +1,193 @@
+[app]
+# CILOVY SOUBOR s poznamkami (append mode).
+# Mozne hodnoty: relativni/absolutni cesta k .md souboru.
+notes_file = "notes.md"
+
+# faster-whisper model.
+# Mozne hodnoty: "tiny" | "base" | "small" | "medium" | "large-v3" | "turbo".
+# Doporuceni: "base" pro bezne pouziti, "turbo" pro maximalni rychlost.
+model_size = "base"
+
+# Ollama model pro zpracovani transcriptu do markdownu.
+# Mozne hodnoty: libovolny lokalne dostupny model v Ollama.
+ollama_model = "llama3.2:3b"
+
+[audio]
+# Velikost audio bloku ve vzorcich (mensi = nizsi latence, vyssi overhead).
+# Mozne hodnoty: cele cislo > 0 (typicky 512-4096).
+chunk = 1024
+
+# Pocet kanalu vstupu.
+# Mozne hodnoty: 1 (mono), 2 (stereo).
+channels = 1
+
+# Vzorkovaci frekvence.
+# Mozne hodnoty: 8000, 16000, 22050, 44100 (Whisper idealne 16000).
+rate = 16000
+
+# Input device.
+# Mozne hodnoty: "" (system default), index zarizeni, nazev zarizeni.
+# Priklady:
+# device = 1
+# device = "Microphone (USB Audio Device)"
+device = ""
+
+# Prah ticha pro flush chunku.
+# Mozne hodnoty: cele cislo >= 0 (typicky desitky az nizsi stovky).
+silence_threshold = 200
+
+# Jak dlouho musi trvat ticho, aby se chunk uzavrel.
+# Mozne hodnoty: desetinne cislo > 0 (typicky 1.0-3.0).
+silence_duration = 1.2
+
+# Maximalni delka chunku i bez ticha.
+# Mozne hodnoty: desetinne cislo > 0 (typicky 6.0-20.0).
+max_chunk_seconds = 8.0
+
+[transcriber]
+# Jazyk Whisper prepisu.
+# Mozne hodnoty: ISO kod jazyka, napr. "cs", "en", "de", "sk".
+language = "en"
+
+# Sirka sample v bytech.
+# Mozne hodnoty: 2 (int16) - aktualne jedina podporovana hodnota v pipeline.
+sample_width = 2
+
+# Vypocetni zarizeni.
+# Mozne hodnoty: "auto" | "cpu" | "cuda".
+compute_device = "auto"
+
+# fp16_mode: "auto" | true | false
+# true ma efekt jen na CUDA.
+fp16_mode = "auto"
+
+# Dekodovaci teplota Whisper.
+# Mozne hodnoty: 0.0-1.0 (0.0 = nejdeterministictejsi vystup).
+temperature = 0.0
+
+# Sirka beam search.
+# Mozne hodnoty: cele cislo >= 1 (typicky 1-8).
+# Vyssi = casto presnejsi, ale pomalejsi.
+beam_size = 3
+
+# Pocet kandidatu pri samplingu.
+# Mozne hodnoty: cele cislo >= 1 (typicky 1-8).
+best_of = 3
+
+# Navazovani na predchozi text v dekodovani.
+# Mozne hodnoty: true | false
+condition_on_previous_text = true
+
+# Prah pro detekci "no speech" segmentu.
+# Mozne hodnoty: 0.0-1.0 (typicky 0.4-0.8).
+no_speech_threshold = 0.6
+
+# Log-probability threshold pro filtraci segmentu.
+# Mozne hodnoty: zaporna nebo nulova hodnota (typicky -2.0 az 0.0).
+logprob_threshold = -1.0
+
+[processor]
+# Kolik poslednich radku poznamek se posila jako kontext do promptu.
+# Mozne hodnoty: cele cislo >= 0 (typicky 20-100).
+context_lines = 30
+
+# Kolik poslednich headingu se posila jako outline.
+# Mozne hodnoty: cele cislo >= 0 (typicky 5-20).
+heading_lines = 8
+
+# Timeout jednoho volani Ollama (sekundy).
+# Mozne hodnoty: cele cislo > 0 (typicky 20-90).
+ollama_timeout = 30
+
+# Pocet retry pokusu po timeout/chybe.
+# Mozne hodnoty: cele cislo >= 0 (0 = bez retry).
+ollama_retries = 1
+
+# Zakladni backoff mezi retry (sekundy).
+# Mozne hodnoty: desetinne cislo >= 0.
+retry_backoff_seconds = 1.5
+
+# Delka preview vypisu v logu.
+# Mozne hodnoty: cele cislo >= 60.
+feedback_preview_chars = 180
+
+# Max chars kontextu v promptu.
+# Mozne hodnoty: cele cislo >= 500 (typicky 2000-10000).
+max_context_chars = 4000
+
+# Minimalni pocet bullet pointu pro quality check.
+# Mozne hodnoty: cele cislo >= 1.
+min_bullet_points = 5
+
+# Mekky limit radku na sekci.
+# Mozne hodnoty: cele cislo >= 10.
+max_section_lines = 45
+
+# prompt_mode: "fast" | "balanced" | "detailed"
+# "fast" = nejrychlejsi, "detailed" = nejpodrobnejsi, "balanced" = bezny provoz.
+prompt_mode = "balanced"
+
+# two_phase_extraction: true = extract facts first, then render as markdown (better quality)
+# false = single-phase combined prompt (faster)
+two_phase_extraction = false
+
+# max_required_facts: kolik overitelnych faktu z transcriptu se ma hlidat
+# Mozne hodnoty: cele cislo >= 4 (typicky 6-16).
+max_required_facts = 8
+
+# enforce_fact_coverage: pokud markdown vynecha fakta, udela se opravny pass
+# Mozne hodnoty: true | false
+enforce_fact_coverage = true
+
+# preserve_note_style: drzi nazvy sekci a ton podle existujicich poznamek
+# Mozne hodnoty: true | false
+preserve_note_style = true
+
+# adaptive_speed_mode: extra passy pousti jen kdyz je to potreba (rychlejsi)
+# Mozne hodnoty: true | false
+adaptive_speed_mode = true
+
+# kratke transcripty jedou single-phase (preskoci two-phase)
+# Mozne hodnoty: cele cislo >= 80 (pocet znaku transcriptu).
+short_transcript_chars = 260
+
+# coverage repair se spusti jen pri vyraznem vypadku faktu
+# Mozne hodnoty: cele cislo >= 1.
+coverage_repair_min_missing = 4
+
+# Mozne hodnoty: 0.0-1.0 (podil chybejicich faktu).
+coverage_repair_min_missing_ratio = 0.45
+
+# quality repair se preskoci, pokud je vystup jen lehce pod prahem
+# Mozne hodnoty: cele cislo >= 80 (minimum znaku, pod kterym se oprava vynuti).
+quality_repair_min_chars = 120
+
+[queues]
+# Max delka fronty audio chunku.
+# Mozne hodnoty: cele cislo >= 1.
+audio_maxsize = 32
+
+# Max delka fronty transcriptu.
+# Mozne hodnoty: cele cislo >= 1.
+transcript_maxsize = 64
+
+[memory]
+# Zapnout/vypnout vektorovou pamet (ChromaDB) pro semanticke deduplikovani a kontext.
+# Mozne hodnoty: true | false
+enable_vector_memory = true
+
+# Slozka, kde se ulozi vektorova DB (relativne vuci CWD).
+# Mozne hodnoty: relativni nebo absolutni cesta.
+persist_dir = ".notes_vector_db"
+
+# Maximalni kosinova vzdalenost (0-1), pod kterou se poznamka povazuje za duplikat.
+# Mozne hodnoty: 0.01-0.2 (nizsi = striknejsi; default 0.05 odpovida ~95% podobnosti).
+similarity_threshold = 0.05
+
+# Kolik semanticky podobnych poznamek se prida do kontextu promptu.
+# Mozne hodnoty: cele cislo >= 1 (typicky 2-5).
+context_results = 3
+
+# Automaticky pridat [[Wiki-links]] pro propojovani md souboru ve stejne slozce.
+# Mozne hodnoty: true | false
+enable_wiki_links = true

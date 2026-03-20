@@ -95,6 +95,10 @@ context_lines = 30
 # Mozne hodnoty: cele cislo >= 0 (typicky 5-20).
 heading_lines = 8
 
+# Ollama API base URL (misto shell `ollama run` se vola HTTP API).
+# Mozne hodnoty: URL lokalniho/remote Ollama serveru.
+ollama_base_url = "http://localhost:11434"
+
 # Timeout jednoho volani Ollama (sekundy).
 # Mozne hodnoty: cele cislo > 0 (typicky 20-90).
 ollama_timeout = 30
@@ -106,6 +110,36 @@ ollama_retries = 1
 # Zakladni backoff mezi retry (sekundy).
 # Mozne hodnoty: desetinne cislo >= 0.
 retry_backoff_seconds = 1.5
+
+# Keep-alive modelu mezi requesty (napr. "5m" nebo "0" pro okamzite unload).
+# Mozne hodnoty: textovy interval dle Ollama API.
+ollama_keep_alive = "5m"
+
+# Generation options pro stabilnejsi a konzistentnejsi markdown vystupy.
+# Teplota: nizsi = deterministickejsi vystup.
+ollama_temperature = 0.2
+
+# Nucleus sampling.
+ollama_top_p = 0.9
+
+# Top-k sampling.
+ollama_top_k = 40
+
+# Penalizace opakovani.
+ollama_repeat_penalty = 1.1
+
+# Max pocet vygenerovanych tokenu.
+ollama_num_predict = 768
+
+# Kontextove okno modelu.
+ollama_num_ctx = 4096
+
+# Seed pro reprodukovatelnejsi vysledky.
+ollama_seed = 42
+
+# Structured facts extraction: v phase1 pozada model o JSON fakta (stabilnejsi coverage).
+# Mozne hodnoty: true | false
+structured_facts_extraction = true
 
 # Delka preview vypisu v logu.
 # Mozne hodnoty: cele cislo >= 60.

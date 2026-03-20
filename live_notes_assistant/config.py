@@ -40,9 +40,19 @@ class TranscriberSection:
 class ProcessorSection:
     context_lines: int = 50
     heading_lines: int = 10
+    ollama_base_url: str = "http://localhost:11434"
     ollama_timeout: int = 30
     ollama_retries: int = 2
     retry_backoff_seconds: float = 2.0
+    ollama_keep_alive: str = "5m"
+    ollama_temperature: float = 0.2
+    ollama_top_p: float = 0.9
+    ollama_top_k: int = 40
+    ollama_repeat_penalty: float = 1.1
+    ollama_num_predict: int = 768
+    ollama_num_ctx: int = 4096
+    ollama_seed: int = 42
+    structured_facts_extraction: bool = True
     feedback_preview_chars: int = 180
     max_context_chars: int = 6000
     min_bullet_points: int = 6
@@ -188,9 +198,24 @@ def load_settings(config_path):
         processor=ProcessorSection(
             context_lines=int(processor_data.get("context_lines", ProcessorSection.context_lines)),
             heading_lines=int(processor_data.get("heading_lines", ProcessorSection.heading_lines)),
+            ollama_base_url=str(processor_data.get("ollama_base_url", ProcessorSection.ollama_base_url)),
             ollama_timeout=int(processor_data.get("ollama_timeout", ProcessorSection.ollama_timeout)),
             ollama_retries=int(processor_data.get("ollama_retries", ProcessorSection.ollama_retries)),
             retry_backoff_seconds=float(processor_data.get("retry_backoff_seconds", ProcessorSection.retry_backoff_seconds)),
+            ollama_keep_alive=str(processor_data.get("ollama_keep_alive", ProcessorSection.ollama_keep_alive)),
+            ollama_temperature=float(processor_data.get("ollama_temperature", ProcessorSection.ollama_temperature)),
+            ollama_top_p=float(processor_data.get("ollama_top_p", ProcessorSection.ollama_top_p)),
+            ollama_top_k=int(processor_data.get("ollama_top_k", ProcessorSection.ollama_top_k)),
+            ollama_repeat_penalty=float(
+                processor_data.get("ollama_repeat_penalty", ProcessorSection.ollama_repeat_penalty)
+            ),
+            ollama_num_predict=int(processor_data.get("ollama_num_predict", ProcessorSection.ollama_num_predict)),
+            ollama_num_ctx=int(processor_data.get("ollama_num_ctx", ProcessorSection.ollama_num_ctx)),
+            ollama_seed=int(processor_data.get("ollama_seed", ProcessorSection.ollama_seed)),
+            structured_facts_extraction=_parse_bool(
+                processor_data.get("structured_facts_extraction", ProcessorSection.structured_facts_extraction),
+                ProcessorSection.structured_facts_extraction,
+            ),
             feedback_preview_chars=int(processor_data.get("feedback_preview_chars", ProcessorSection.feedback_preview_chars)),
             max_context_chars=int(processor_data.get("max_context_chars", ProcessorSection.max_context_chars)),
             min_bullet_points=int(processor_data.get("min_bullet_points", ProcessorSection.min_bullet_points)),

@@ -1,9 +1,12 @@
+import json
 import queue
 import re
 import subprocess
 import threading
 import time
 import unicodedata
+import urllib.error
+import urllib.request
 from collections import deque
 from pathlib import Path
 
@@ -25,9 +28,19 @@ class NotesProcessorWorker(threading.Thread):
         ollama_model="llama3.2:3b",
         context_lines=50,
         heading_lines=10,
+        ollama_base_url="http://localhost:11434",
         ollama_timeout=30,
         ollama_retries=2,
         retry_backoff_seconds=2.0,
+        ollama_keep_alive="5m",
+        ollama_temperature=0.2,
+        ollama_top_p=0.9,
+        ollama_top_k=40,
+        ollama_repeat_penalty=1.1,
+        ollama_num_predict=768,
+        ollama_num_ctx=4096,
+        ollama_seed=42,
+        structured_facts_extraction=True,
         feedback_preview_chars=180,
         max_context_chars=6000,
         min_bullet_points=6,
@@ -56,9 +69,19 @@ class NotesProcessorWorker(threading.Thread):
         self.ollama_model = ollama_model
         self.context_lines = context_lines
         self.heading_lines = heading_lines
+        self.ollama_base_url = str(ollama_base_url).rstrip("/")
         self.ollama_timeout = ollama_timeout
         self.ollama_retries = max(0, int(ollama_retries))
         self.retry_backoff_seconds = max(0.0, float(retry_backoff_seconds))
+        self.ollama_keep_alive = str(ollama_keep_alive)
+        self.ollama_temperature = float(ollama_temperature)
+        self.ollama_top_p = float(ollama_top_p)
+        self.ollama_top_k = int(ollama_top_k)
+        self.ollama_repeat_penalty = float(ollama_repeat_penalty)
+        self.ollama_num_predict = int(ollama_num_predict)
+        self.ollama_num_ctx = int(ollama_num_ctx)
+        self.ollama_seed = int(ollama_seed)
+        self.structured_facts_extraction = bool(structured_facts_extraction)
         self.feedback_preview_chars = max(60, int(feedback_preview_chars))
         self.max_context_chars = max(500, int(max_context_chars))
         self.min_bullet_points = max(1, int(min_bullet_points))
@@ -651,14 +674,108 @@ VRAT JEN UPRAVENY MARKDOWN:"""
             return True
         return bullets < max(1, self.min_bullet_points - 1) or chars < self.quality_repair_min_chars
 
-    def _run_ollama(self, prompt, timeout_seconds):
-        return subprocess.run(
-            ["ollama", "run", self.ollama_model],
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
+    def _ollama_options(self):
+        return {
+            "temperature": self.ollama_temperature,
+            "top_p": self.ollama_top_p,
+            "top_k": self.ollama_top_k,
+            "repeat_penalty": self.ollama_repeat_penalty,
+            "num_predict": self.ollama_num_predict,
+            "num_ctx": self.ollama_num_ctx,
+            "seed": self.ollama_seed,
+        }
+
+    def _facts_json_schema(self):
+        return {
+            "type": "object",
+            "properties": {
+                "language": {"type": "string"},
+                "facts": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "text": {"type": "string"},
+                            "kind": {"type": "string"},
+                            "confidence": {"type": "number"},
+                        },
+                        "required": ["text", "kind", "confidence"],
+                    },
+                },
+            },
+            "required": ["language", "facts"],
+        }
+
+    def _extract_facts_from_json(self, response_text):
+        try:
+            payload = json.loads(response_text)
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+        facts = payload.get("facts", [])
+        if not isinstance(facts, list):
+            return []
+
+        extracted = []
+        for item in facts:
+            if not isinstance(item, dict):
+                continue
+            text = str(item.get("text", "")).strip()
+            if not text:
+                continue
+            extracted.append(text)
+        return extracted
+
+    def _run_ollama(self, prompt, timeout_seconds, format_schema=None):
+        payload = {
+            "model": self.ollama_model,
+            "prompt": prompt,
+            "stream": False,
+            "keep_alive": self.ollama_keep_alive,
+            "options": self._ollama_options(),
+        }
+        if format_schema is not None:
+            payload["format"] = format_schema
+
+        request = urllib.request.Request(
+            url=f"{self.ollama_base_url}/api/generate",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+                body = json.loads(response.read().decode("utf-8"))
+        except TimeoutError as exc:
+            raise subprocess.TimeoutExpired(cmd="ollama api generate", timeout=timeout_seconds) from exc
+        except urllib.error.HTTPError as exc:
+            err_payload = exc.read().decode("utf-8", errors="ignore")
+            return subprocess.CompletedProcess(
+                args=["ollama", "api", "generate"],
+                returncode=1,
+                stdout="",
+                stderr=f"HTTP {exc.code}: {err_payload}".strip(),
+            )
+        except urllib.error.URLError as exc:
+            return subprocess.CompletedProcess(
+                args=["ollama", "api", "generate"],
+                returncode=1,
+                stdout="",
+                stderr=f"Connection error: {exc}",
+            )
+
+        response_text = str(body.get("response", ""))
+        thinking_text = str(body.get("thinking", "")).strip()
+        merged_output = response_text
+        if thinking_text:
+            merged_output = f"<think>{thinking_text}</think>\n{response_text}"
+
+        return subprocess.CompletedProcess(
+            args=["ollama", "api", "generate"],
+            returncode=0,
+            stdout=merged_output,
+            stderr="",
         )
 
     def _log_metrics(self):
@@ -689,7 +806,7 @@ VRAT JEN UPRAVENY MARKDOWN:"""
             f"quality_ok_after_repair={m['quality_ok_after_repair']}"
         )
 
-    def _run_ollama_with_retry(self, prompt, label):
+    def _run_ollama_with_retry(self, prompt, label, format_schema=None):
         """Run ollama with retry logic. Returns (result, elapsed) or (None, None) on failure."""
         result = None
         timeout_error = None
@@ -697,7 +814,7 @@ VRAT JEN UPRAVENY MARKDOWN:"""
             try:
                 timeout_seconds = self.ollama_timeout + attempt * 10
                 started = time.monotonic()
-                result = self._run_ollama(prompt, timeout_seconds)
+                result = self._run_ollama(prompt, timeout_seconds, format_schema=format_schema)
                 elapsed = time.monotonic() - started
                 print(
                     f"[processor:{label}] attempt {attempt + 1}/{self.ollama_retries + 1} "
@@ -730,7 +847,8 @@ VRAT JEN UPRAVENY MARKDOWN:"""
         # Phase 1: extract raw facts
         extraction_prompt = self._build_extraction_prompt(context, transcript, similar_notes=similar_notes)
         print(f"[processor:phase1] extracting facts (prompt chars={len(extraction_prompt)})")
-        result1, _ = self._run_ollama_with_retry(extraction_prompt, "phase1")
+        format_schema = self._facts_json_schema() if self.structured_facts_extraction else None
+        result1, _ = self._run_ollama_with_retry(extraction_prompt, "phase1", format_schema=format_schema)
         if result1 is None:
             self._metrics["phase1_fail"] += 1
             return None
@@ -746,7 +864,15 @@ VRAT JEN UPRAVENY MARKDOWN:"""
         if think_preview:
             print(f"[processor:phase1] think preview: {think_preview}")
 
-        facts = self._strip_think_and_fences(facts_raw).strip()
+        cleaned_facts_raw = self._strip_think_and_fences(facts_raw).strip()
+        facts = cleaned_facts_raw
+        if format_schema is not None:
+            structured_facts = self._extract_facts_from_json(cleaned_facts_raw)
+            if structured_facts:
+                facts = "\n".join(f"- {line}" for line in structured_facts)
+            else:
+                print("[processor:phase1] structured parse failed, falling back to raw extraction")
+
         if not facts or len(facts) <= 10:
             print("[processor:phase1] extraction too short, skipping")
             self._metrics["phase1_fail"] += 1

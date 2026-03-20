@@ -2,6 +2,8 @@ import queue
 import subprocess
 import threading
 import time
+import urllib.error
+import urllib.request
 
 import sounddevice as sd
 
@@ -56,9 +58,19 @@ class LiveNotesAssistant:
             ollama_model=self.settings.app.ollama_model,
             context_lines=self.settings.processor.context_lines,
             heading_lines=self.settings.processor.heading_lines,
+            ollama_base_url=self.settings.processor.ollama_base_url,
             ollama_timeout=self.settings.processor.ollama_timeout,
             ollama_retries=self.settings.processor.ollama_retries,
             retry_backoff_seconds=self.settings.processor.retry_backoff_seconds,
+            ollama_keep_alive=self.settings.processor.ollama_keep_alive,
+            ollama_temperature=self.settings.processor.ollama_temperature,
+            ollama_top_p=self.settings.processor.ollama_top_p,
+            ollama_top_k=self.settings.processor.ollama_top_k,
+            ollama_repeat_penalty=self.settings.processor.ollama_repeat_penalty,
+            ollama_num_predict=self.settings.processor.ollama_num_predict,
+            ollama_num_ctx=self.settings.processor.ollama_num_ctx,
+            ollama_seed=self.settings.processor.ollama_seed,
+            structured_facts_extraction=self.settings.processor.structured_facts_extraction,
             feedback_preview_chars=self.settings.processor.feedback_preview_chars,
             max_context_chars=self.settings.processor.max_context_chars,
             min_bullet_points=self.settings.processor.min_bullet_points,
@@ -91,13 +103,28 @@ class LiveNotesAssistant:
             )
         except Exception as exc:
             print(f"[app] ollama is not available: {exc}")
-            return False
+            result = None
 
-        if result.returncode != 0:
+        if result is not None and result.returncode == 0:
+            return True
+
+        if result is not None and result.returncode != 0:
             err = (result.stderr or "").strip()
             print(f"[app] ollama check failed: {err[:200]}")
-            return False
-        return True
+
+        base_url = self.settings.processor.ollama_base_url.rstrip("/")
+        tags_url = f"{base_url}/api/tags"
+        request = urllib.request.Request(tags_url, method="GET")
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                if 200 <= response.status < 300:
+                    print(f"[app] ollama api reachable at {base_url}")
+                    return True
+        except urllib.error.URLError as exc:
+            print(f"[app] ollama api check failed: {exc}")
+        except Exception as exc:
+            print(f"[app] ollama api check exception: {exc}")
+        return False
 
     def _workers(self):
         return [self.capture_worker, self.transcriber_worker, self.processor_worker]
